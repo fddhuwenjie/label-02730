@@ -50,8 +50,29 @@ class TestUploadEndpoint:
     def test_upload_no_file(self, client):
         """Test request without file."""
         response = client.post("/api/v1/upload")
-        
+
         assert response.status_code == 422  # Validation error
+
+    def test_upload_binary_content_rejected(self, client):
+        """Test that a file with binary content is rejected even if extension is .csv."""
+        binary_content = b"\x00\x01\x02\x03\xff\xfe" * 50
+        files = {"file": ("data.csv", binary_content, "text/csv")}
+
+        response = client.post("/api/v1/upload", files=files)
+
+        assert response.status_code == 400
+        assert "binary" in response.json()["detail"].lower()
+
+    def test_upload_non_utf8_content_rejected(self, client):
+        """Test that a CSV file with non-UTF-8 encoding is rejected."""
+        # Latin-1 encoded content with bytes invalid in UTF-8
+        non_utf8 = "id,name\n1,Ren\xe9e".encode("latin-1")
+        files = {"file": ("data.csv", non_utf8, "text/csv")}
+
+        response = client.post("/api/v1/upload", files=files)
+
+        assert response.status_code == 400
+        assert "utf-8" in response.json()["detail"].lower()
 
 
 class TestHealthEndpoint:

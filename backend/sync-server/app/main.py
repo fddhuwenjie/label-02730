@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.health import router as health_router
 from app.api.upload import router as upload_router
 from app.core.logging import logger
 
@@ -25,16 +26,19 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS middleware
+from app.core.config import CORS_ORIGINS
+
+# CORS middleware — origins configured via CORS_ORIGINS env var
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 # Include routers
+app.include_router(health_router)
 app.include_router(upload_router)
 
 

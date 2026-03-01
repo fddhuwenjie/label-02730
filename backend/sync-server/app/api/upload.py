@@ -23,14 +23,34 @@ class UploadResponse(BaseModel):
 
 
 def validate_file(file: UploadFile) -> None:
-    """Validate uploaded file type and size."""
-    # Check file extension
+    """Validate uploaded file extension."""
     ext = Path(file.filename).suffix.lower()
     if ext not in ALLOWED_EXTENSIONS:
         logger.warning(f"Invalid file type: {file.filename}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid file type. Only {', '.join(ALLOWED_EXTENSIONS)} allowed."
+        )
+
+
+def validate_csv_content(content: bytes) -> None:
+    """Validate file content is text-based, not binary.
+
+    Checks the first 512 bytes for null bytes (a reliable binary indicator)
+    and confirms the content is decodable as UTF-8 text.
+    """
+    probe = content[:512]
+    if b"\x00" in probe:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File content is not valid CSV (binary data detected).",
+        )
+    try:
+        probe.decode("utf-8")
+    except UnicodeDecodeError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File content is not valid UTF-8 text. CSV files must be text-based.",
         )
 
 
@@ -52,11 +72,12 @@ async def upload_csv(file: UploadFile = File(..., description="CSV file to uploa
     - Stores file with unique timestamp-based name
     """
     validate_file(file)
-    
-    # Read file content
+
     content = await file.read()
     file_size = len(content)
-    
+
+    validate_csv_content(content)
+
     # Check file size
     if file_size > MAX_FILE_SIZE:
         logger.warning(f"File too large: {file_size} bytes")
@@ -99,7 +120,3 @@ async def upload_csv(file: UploadFile = File(..., description="CSV file to uploa
     )
 
 
-@router.get("/health")
-async def health_check():
-    """Health check endpoint."""
-    return {"status": "healthy"}
