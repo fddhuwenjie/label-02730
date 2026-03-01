@@ -1,7 +1,8 @@
 """FastAPI application entry point."""
+import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.health import router as health_router
@@ -36,6 +37,22 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["Content-Type", "Authorization"],
 )
+
+@app.middleware("http")
+async def access_log_middleware(request: Request, call_next):
+    start = time.perf_counter()
+    response = await call_next(request)
+    elapsed_ms = (time.perf_counter() - start) * 1000
+    logger.info(
+        '%s %s %s %.1fms "%s"',
+        request.method,
+        request.url.path,
+        response.status_code,
+        elapsed_ms,
+        request.headers.get("user-agent", "-"),
+    )
+    return response
+
 
 # Include routers
 app.include_router(health_router)

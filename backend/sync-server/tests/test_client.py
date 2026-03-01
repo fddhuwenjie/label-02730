@@ -3,7 +3,7 @@ import pytest
 from unittest.mock import call, patch, MagicMock
 import httpx
 
-from client import upload_file
+from client.client import upload_file
 
 
 class TestUploadFile:
@@ -28,7 +28,7 @@ class TestUploadFile:
         captured = capsys.readouterr()
         assert "Only .csv files" in captured.out
 
-    @patch("client.httpx.Client")
+    @patch("client.client.httpx.Client")
     def test_successful_upload(self, mock_client_class, tmp_path, capsys):
         """Test successful file upload."""
         csv_file = tmp_path / "test.csv"
@@ -55,8 +55,8 @@ class TestUploadFile:
         captured = capsys.readouterr()
         assert "Success" in captured.out
 
-    @patch("client.time.sleep")
-    @patch("client.httpx.Client")
+    @patch("client.client.time.sleep")
+    @patch("client.client.httpx.Client")
     def test_connection_error(self, mock_client_class, mock_sleep, tmp_path, capsys):
         """Test handling of connection errors — single attempt, no retry."""
         csv_file = tmp_path / "test.csv"
@@ -75,8 +75,8 @@ class TestUploadFile:
         assert "Connection error" in captured.out
         mock_sleep.assert_not_called()
 
-    @patch("client.time.sleep")
-    @patch("client.httpx.Client")
+    @patch("client.client.time.sleep")
+    @patch("client.client.httpx.Client")
     def test_timeout_error(self, mock_client_class, mock_sleep, tmp_path, capsys):
         """Test handling of timeout errors — single attempt, no retry."""
         csv_file = tmp_path / "test.csv"
@@ -95,8 +95,8 @@ class TestUploadFile:
         assert "Timeout" in captured.out
         mock_sleep.assert_not_called()
 
-    @patch("client.time.sleep")
-    @patch("client.httpx.Client")
+    @patch("client.client.time.sleep")
+    @patch("client.client.httpx.Client")
     def test_server_error(self, mock_client_class, mock_sleep, tmp_path, capsys):
         """Test handling of server errors — single attempt, no retry."""
         csv_file = tmp_path / "test.csv"
@@ -119,8 +119,8 @@ class TestUploadFile:
         assert "Server error" in captured.out
         mock_sleep.assert_not_called()
 
-    @patch("client.time.sleep")
-    @patch("client.httpx.Client")
+    @patch("client.client.time.sleep")
+    @patch("client.client.httpx.Client")
     def test_retry_on_connection_error(self, mock_client_class, mock_sleep, tmp_path, capsys):
         """Test that upload is retried on connection errors with backoff delay."""
         csv_file = tmp_path / "test.csv"
@@ -139,8 +139,8 @@ class TestUploadFile:
         # Backoff sleeps: 1s before attempt 2, 2s before attempt 3
         assert mock_sleep.call_args_list == [call(1), call(2)]
 
-    @patch("client.time.sleep")
-    @patch("client.httpx.Client")
+    @patch("client.client.time.sleep")
+    @patch("client.client.httpx.Client")
     def test_retry_succeeds_on_second_attempt(self, mock_client_class, mock_sleep, tmp_path, capsys):
         """Test that a successful second attempt returns True."""
         csv_file = tmp_path / "test.csv"

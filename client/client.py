@@ -78,6 +78,10 @@ def upload_file(
             last_error = f"Timeout: Server did not respond within {timeout}s"
             print(f"\n❌ {last_error}")
             continue
+        except httpx.RequestError as e:
+            last_error = f"Request error: {e}"
+            print(f"\n❌ {last_error}")
+            continue
         except Exception as e:
             print(f"\n❌ Unexpected error: {e}")
             return False

@@ -3,7 +3,7 @@ version: '3.8'
 services:
   csv-sync-server:
     build:
-      context: ./backend
+      context: ./Backend
       dockerfile: Dockerfile
     container_name: csv-sync-server
     ports:

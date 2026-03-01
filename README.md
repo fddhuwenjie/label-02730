@@ -26,7 +26,7 @@ docker-compose down
 
 ```bash
 # 进入项目目录
-cd backend/sync-server
+cd Backend/sync-server
 
 # 创建虚拟环境
 python3 -m venv venv
@@ -58,11 +58,37 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ### 使用示例
 
 ```bash
-# 使用客户端
-python3 client.py test_data.csv --url http://localhost:8000
+# 使用客户端（从项目根目录执行）
+python3 client/client.py Backend/sync-server/test_data.csv --url http://localhost:8000
 
-# 使用 curl
-curl -X POST http://localhost:8000/api/v1/upload -F "file=@test_data.csv"
+# 使用 curl（从项目根目录执行）
+curl -X POST http://localhost:8000/api/v1/upload \
+     -F "file=@Backend/sync-server/test_data.csv"
+```
+
+#### 成功响应示例（HTTP 200）
+
+```json
+{
+  "success": true,
+  "message": "File uploaded successfully",
+  "filename": "20260301_143021_a3f8c2d1e4b5.csv",
+  "file_path": "2026-03-01/20260301_143021_a3f8c2d1e4b5.csv",
+  "file_size": 1024
+}
+```
+
+#### 失败响应示例
+
+```bash
+# 文件类型不支持（HTTP 400）
+{"detail": "Invalid file type. Only .csv allowed."}
+
+# 文件超过 10MB（HTTP 413）
+{"detail": "File too large. Maximum size is 10MB."}
+
+# 文件内容非合法 CSV（HTTP 400）
+{"detail": "File content is not valid CSV (binary data detected)."}
 ```
 
 ## 测试账号
@@ -84,7 +110,9 @@ curl -X POST http://localhost:8000/api/v1/upload -F "file=@test_data.csv"
 ## 项目结构
 
 ```
-backend/
+client/
+└── client.py                # 命令行客户端（独立于服务端）
+Backend/
 ├── Dockerfile
 └── sync-server/
     ├── app/
@@ -97,7 +125,6 @@ backend/
     │       ├── __init__.py
     │       ├── config.py    # 配置管理
     │       └── logging.py   # 日志配置
-    ├── client.py            # 命令行客户端
     ├── tests/               # 单元测试
     │   ├── conftest.py
     │   ├── test_upload.py
@@ -119,10 +146,11 @@ backend/
 | MAX_FILE_SIZE | 10485760 | 最大文件大小(字节) |
 | HOST | 0.0.0.0 | 服务监听地址 |
 | PORT | 8000 | 服务端口 |
+| CORS_ORIGINS | `*`（全部允许） | 允许的跨域来源，逗号分隔；生产环境应精确填写，例如 `https://app.example.com` |
 
 ## 运行测试
 
 ```bash
-cd backend/sync-server
+cd Backend/sync-server
 python3 -m pytest tests/ -v
 ```

@@ -27,7 +27,6 @@ COPY --from=builder /root/.local /home/appuser/.local
 
 # Copy application code
 COPY sync-server/app ./app
-COPY sync-server/client.py .
 
 # Set environment variables
 ENV PATH=/home/appuser/.local/bin:$PATH \
