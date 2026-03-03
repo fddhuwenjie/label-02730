@@ -191,7 +191,7 @@ main() {
     # 测试上传
     print_info "=== 测试文件上传 ==="
     
-    TEST_FILE="Backend/sync-server/test_data.csv"
+    TEST_FILE="sync-server/test_data.csv"
     if [ -f "$TEST_FILE" ]; then
         print_info "上传测试文件: $TEST_FILE"
         echo ""

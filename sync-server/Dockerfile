@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install dependencies
-COPY sync-server/requirements.txt .
+COPY requirements.txt .
 RUN pip install --no-cache-dir --user -r requirements.txt
 
 # Production stage
@@ -26,7 +26,7 @@ RUN useradd --create-home --shell /bin/bash appuser
 COPY --from=builder /root/.local /home/appuser/.local
 
 # Copy application code
-COPY sync-server/app ./app
+COPY app ./app
 
 # Set environment variables
 ENV PATH=/home/appuser/.local/bin:$PATH \

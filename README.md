@@ -26,7 +26,7 @@ docker-compose down
 
 ```bash
 # 进入项目目录
-cd Backend/sync-server
+cd sync-server
 
 # 创建虚拟环境
 python3 -m venv venv
@@ -59,11 +59,11 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
 ```bash
 # 使用客户端（从项目根目录执行）
-python3 client/client.py Backend/sync-server/test_data.csv --url http://localhost:8000
+python3 client/client.py sync-server/test_data.csv --url http://localhost:8000
 
 # 使用 curl（从项目根目录执行）
 curl -X POST http://localhost:8000/api/v1/upload \
-     -F "file=@Backend/sync-server/test_data.csv"
+     -F "file=@sync-server/test_data.csv"
 ```
 
 #### 成功响应示例（HTTP 200）
@@ -112,24 +112,24 @@ curl -X POST http://localhost:8000/api/v1/upload \
 ```
 client/
 └── client.py                # 命令行客户端（独立于服务端）
-Backend/
+sync-server/
 ├── Dockerfile
-└── sync-server/
-    ├── app/
-    │   ├── __init__.py
-    │   ├── main.py          # FastAPI 应用入口
-    │   ├── api/
-    │   │   ├── __init__.py
-    │   │   └── upload.py    # 上传接口
-    │   └── core/
-    │       ├── __init__.py
-    │       ├── config.py    # 配置管理
-    │       └── logging.py   # 日志配置
-    ├── tests/               # 单元测试
-    │   ├── conftest.py
-    │   ├── test_upload.py
-    │   └── test_client.py
-    └── requirements.txt
+├── requirements.txt
+├── app/
+│   ├── __init__.py
+│   ├── main.py              # FastAPI 应用入口
+│   ├── api/
+│   │   ├── __init__.py
+│   │   ├── health.py        # 健康检查接口
+│   │   └── upload.py        # 上传接口
+│   └── core/
+│       ├── __init__.py
+│       ├── config.py        # 配置管理
+│       └── logging.py       # 日志配置
+└── tests/                   # 单元测试
+    ├── conftest.py
+    ├── test_upload.py
+    └── test_client.py
 ```
 
 ## 文件存储规则
@@ -146,11 +146,11 @@ Backend/
 | MAX_FILE_SIZE | 10485760 | 最大文件大小(字节) |
 | HOST | 0.0.0.0 | 服务监听地址 |
 | PORT | 8000 | 服务端口 |
-| CORS_ORIGINS | `*`（全部允许） | 允许的跨域来源，逗号分隔；生产环境应精确填写，例如 `https://app.example.com` |
+| CORS_ORIGINS | `*`（全部允许，**生产环境必须修改**） | 允许的跨域来源，逗号分隔；生产环境必须精确填写，例如 `https://app.example.com` |
 
 ## 运行测试
 
 ```bash
-cd Backend/sync-server
+cd sync-server
 python3 -m pytest tests/ -v
 ```
