@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.health import router as health_router
 from app.api.upload import router as upload_router
+from app.api.file_versions import router as file_versions_router
 from app.core.logging import logger
 
 
@@ -57,6 +58,7 @@ async def access_log_middleware(request: Request, call_next):
 # Include routers
 app.include_router(health_router)
 app.include_router(upload_router)
+app.include_router(file_versions_router)
 
 
 if __name__ == "__main__":
