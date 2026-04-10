@@ -25,9 +25,11 @@ class TestUploadEndpoint:
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
-        assert data["message"] == "File uploaded successfully"
+        assert "File uploaded successfully" in data["message"]
         assert data["file_size"] == len(csv_content)
-        assert data["filename"].endswith(".csv")
+        assert data["filename"] == "test.csv"
+        assert data["version"] >= 1
+        assert data["row_count"] == 3
 
     def test_upload_invalid_extension(self, client):
         """Test rejection of non-CSV files."""

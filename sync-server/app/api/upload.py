@@ -1,7 +1,6 @@
 """CSV file upload API endpoints."""
 import csv
 import io
-import uuid
 from datetime import datetime
 from pathlib import Path
 
@@ -21,6 +20,31 @@ class UploadResponse(BaseModel):
     filename: str
     file_path: str
     file_size: int
+    version: int
+    row_count: int
+
+
+def get_next_version(base_filename: str, upload_dir: str = UPLOAD_DIR) -> int:
+    """Get next version number for a file."""
+    base_name = Path(base_filename).stem
+    file_dir = Path(upload_dir) / base_name
+    if not file_dir.exists():
+        return 1
+    existing_versions = []
+    for f in file_dir.glob("v*.csv"):
+        try:
+            version_num = int(f.stem[1:])
+            existing_versions.append(version_num)
+        except ValueError:
+            continue
+    return max(existing_versions, default=0) + 1
+
+
+def count_csv_rows(content: bytes) -> int:
+    """Count number of rows in CSV content."""
+    text = content.decode("utf-8")
+    reader = csv.reader(io.StringIO(text))
+    return len(list(reader))
 
 
 def validate_file(file: UploadFile) -> None:
@@ -69,25 +93,6 @@ def validate_csv_content(content: bytes) -> None:
         )
 
 
-def generate_filename(original_name: str, save_dir: Path) -> str:
-    """Generate a collision-free filename with timestamp and UUID.
-
-    Uses the full UUID hex (32 chars) to make collisions virtually impossible.
-    Falls back to retrying if the target path already exists.
-    """
-    ext = Path(original_name).suffix
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    for _ in range(5):
-        unique_id = uuid.uuid4().hex
-        filename = f"{timestamp}_{unique_id}{ext}"
-        if not (save_dir / filename).exists():
-            return filename
-    raise HTTPException(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        detail="Could not generate a unique filename. Please retry.",
-    )
-
-
 @router.post("/upload", response_model=UploadResponse)
 async def upload_csv(file: UploadFile = File(..., description="CSV file to upload")):
     """
@@ -120,12 +125,15 @@ async def upload_csv(file: UploadFile = File(..., description="CSV file to uploa
     content = await file.read()
     validate_csv_content(content)
 
-    date_folder = datetime.now().strftime("%Y-%m-%d")
-    save_dir = Path(UPLOAD_DIR) / date_folder
+    original_filename = file.filename or "unknown.csv"
+    base_name = Path(original_filename).stem
+    version = get_next_version(original_filename)
+    versioned_filename = f"v{version}.csv"
+
+    save_dir = Path(UPLOAD_DIR) / base_name
     save_dir.mkdir(parents=True, exist_ok=True)
 
-    new_filename = generate_filename(file.filename, save_dir)
-    file_path = save_dir / new_filename
+    file_path = save_dir / versioned_filename
     
     try:
         with open(file_path, "wb") as f:
@@ -138,16 +146,17 @@ async def upload_csv(file: UploadFile = File(..., description="CSV file to uploa
             detail="Failed to save file."
         )
     
-    # Return a relative storage path (date_folder/filename) instead of the
-    # absolute host path to avoid leaking server filesystem layout.
-    relative_path = f"{date_folder}/{new_filename}"
+    relative_path = f"{base_name}/{versioned_filename}"
+    row_count = count_csv_rows(content)
 
     return UploadResponse(
         success=True,
-        message="File uploaded successfully",
-        filename=new_filename,
+        message=f"File uploaded successfully as version {version}",
+        filename=original_filename,
         file_path=relative_path,
-        file_size=file_size
+        file_size=file_size,
+        version=version,
+        row_count=row_count
     )
 
 
