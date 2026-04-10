@@ -1,15 +1,16 @@
 """CSV file upload API endpoints."""
 import csv
 import io
-import uuid
 from datetime import datetime
 from pathlib import Path
+from typing import List
 
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from pydantic import BaseModel
 
-from app.core.config import ALLOWED_EXTENSIONS, MAX_FILE_SIZE, UPLOAD_DIR
+from app.core.config import ALLOWED_EXTENSIONS, MAX_FILE_SIZE
 from app.core.logging import logger
+from app.services.version_service import VersionService, get_version_service, VersionInfo, DiffResult
 
 router = APIRouter(prefix="/api/v1", tags=["upload"])
 
@@ -19,8 +20,25 @@ class UploadResponse(BaseModel):
     success: bool
     message: str
     filename: str
+    version: int
     file_path: str
     file_size: int
+
+
+class VersionListResponse(BaseModel):
+    """Response model for version list."""
+    filename: str
+    versions: List[VersionInfo]
+
+
+class DiffResponse(BaseModel):
+    """Response model for version diff."""
+    filename: str
+    version1: int
+    version2: int
+    added_rows: int
+    deleted_rows: int
+    modified_rows: int
 
 
 def validate_file(file: UploadFile) -> None:
@@ -69,33 +87,18 @@ def validate_csv_content(content: bytes) -> None:
         )
 
 
-def generate_filename(original_name: str, save_dir: Path) -> str:
-    """Generate a collision-free filename with timestamp and UUID.
-
-    Uses the full UUID hex (32 chars) to make collisions virtually impossible.
-    Falls back to retrying if the target path already exists.
-    """
-    ext = Path(original_name).suffix
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    for _ in range(5):
-        unique_id = uuid.uuid4().hex
-        filename = f"{timestamp}_{unique_id}{ext}"
-        if not (save_dir / filename).exists():
-            return filename
-    raise HTTPException(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        detail="Could not generate a unique filename. Please retry.",
-    )
-
-
 @router.post("/upload", response_model=UploadResponse)
-async def upload_csv(file: UploadFile = File(..., description="CSV file to upload")):
+async def upload_csv(
+    file: UploadFile = File(..., description="CSV file to upload"),
+    version_service: VersionService = Depends(get_version_service)
+):
     """
     Upload a CSV file to the server.
-    
+
     - Validates file type (.csv only)
     - Checks file size (max 10MB)
-    - Stores file with unique timestamp-based name
+    - Stores file with version management (uploads/{filename}/v{version}.csv)
+    - Version auto-increments for files with the same name
     """
     validate_file(file)
 
@@ -120,34 +123,100 @@ async def upload_csv(file: UploadFile = File(..., description="CSV file to uploa
     content = await file.read()
     validate_csv_content(content)
 
-    date_folder = datetime.now().strftime("%Y-%m-%d")
-    save_dir = Path(UPLOAD_DIR) / date_folder
-    save_dir.mkdir(parents=True, exist_ok=True)
+    # Get the base filename (without extension for the folder name)
+    base_filename = Path(file.filename).stem
 
-    new_filename = generate_filename(file.filename, save_dir)
-    file_path = save_dir / new_filename
-    
-    try:
-        with open(file_path, "wb") as f:
-            f.write(content)
-        logger.info(f"File saved: {file_path}")
-    except IOError as e:
-        logger.error(f"Failed to save file: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to save file."
-        )
-    
-    # Return a relative storage path (date_folder/filename) instead of the
-    # absolute host path to avoid leaking server filesystem layout.
-    relative_path = f"{date_folder}/{new_filename}"
+    # Save the file with version management
+    version, file_path = version_service.save_version(base_filename, content)
+
+    # Return a relative storage path
+    relative_path = f"{base_filename}/v{version}.csv"
 
     return UploadResponse(
         success=True,
         message="File uploaded successfully",
-        filename=new_filename,
+        filename=base_filename,
+        version=version,
         file_path=relative_path,
         file_size=file_size
     )
 
 
+@router.get("/files/{filename}/versions", response_model=VersionListResponse)
+async def get_file_versions(
+    filename: str,
+    version_service: VersionService = Depends(get_version_service)
+):
+    """
+    Get all versions of a file.
+
+    Returns a list of versions with:
+    - version number
+    - upload time
+    - file size
+    - row count
+    """
+    versions = version_service.get_versions(filename)
+
+    if not versions:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"File '{filename}' not found or has no versions."
+        )
+
+    return VersionListResponse(
+        filename=filename,
+        versions=versions
+    )
+
+
+@router.get("/files/{filename}/diff", response_model=DiffResponse)
+async def compare_file_versions(
+    filename: str,
+    v1: int,
+    v2: int,
+    version_service: VersionService = Depends(get_version_service)
+):
+    """
+    Compare two versions of a file.
+
+    Returns:
+    - added_rows: Number of rows added in v2 compared to v1
+    - deleted_rows: Number of rows deleted in v2 compared to v1
+    - modified_rows: Number of rows modified (same first column but different content)
+    """
+    diff_result = version_service.compare_versions(filename, v1, v2)
+
+    return DiffResponse(
+        filename=filename,
+        version1=v1,
+        version2=v2,
+        added_rows=diff_result.added_rows,
+        deleted_rows=diff_result.deleted_rows,
+        modified_rows=diff_result.modified_rows
+    )
+
+
+@router.delete("/files/{filename}/versions/{version}")
+async def delete_file_version(
+    filename: str,
+    version: int,
+    version_service: VersionService = Depends(get_version_service)
+):
+    """
+    Delete a specific version of a file.
+
+    Note: Cannot delete the latest version of a file.
+    """
+    deleted = version_service.delete_version(filename, version)
+
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Version {version} of '{filename}' not found."
+        )
+
+    return {
+        "success": True,
+        "message": f"Version {version} of '{filename}' deleted successfully."
+    }
